@@ -173,3 +173,5 @@ cython_debug/
 #所有的img都不要上传
 /img
 
+# 忽略环境配置文件
+.env
