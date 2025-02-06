@@ -8,6 +8,7 @@ CONFIG = {
     "input_dir": "./data/tq/",      # 原始Excel存放目录
     "output_dir": "./data/processed/",     # 处理结果输出目录
     "standard_columns": [              # 标准列名列表
+        "类别",
         "专业组", 
         "专业名称", 
         "计划数", 
@@ -15,9 +16,13 @@ CONFIG = {
         "备注"
     ],
     "column_mapping": {  # 智能映射规则（支持正则表达式）
+        "类别": [
+            r"类别.*",
+            "专业类别", "专业类型", "专业属性"
+        ],
         "专业组": [
             r".*组.*",
-            "类别", "分组", "组别", "专业群组"
+            "分组", "组别", "专业群组"
         ],
         "专业名称": [
             r"专业.*名称",
@@ -30,7 +35,9 @@ CONFIG = {
         "学费": [
             r"学费[（(].*元.*",
             "学费标准", "专业学费", "学费\n标准",
-            r".*费用.*"  # 扩展匹配规则
+            r".*费用.*",
+            r"^学费$",  # 新增精确匹配
+            r"学费.*"   # 通用匹配规则放在最后
         ],
         "备注": [
             r"备注|说明",
@@ -72,7 +79,7 @@ def map_columns(df, filename):
     # 主映射逻辑
     for std_col, patterns in CONFIG['column_mapping'].items():
         for raw_col in df.columns:
-            if raw_col in new_columns.values():
+            if raw_col in new_columns:
                 continue
             if match_column_pattern(raw_col, patterns):
                 new_columns[raw_col] = std_col
@@ -92,12 +99,21 @@ def map_columns(df, filename):
         column_log.append(f"未匹配列：{unmatched}")
     
     # 执行重命名
-    df = df.rename(columns={v:k for k,v in new_columns.items()})
+    # df = df.rename(columns={v:k for k,v in new_columns.items()})
+    df = df.rename(columns=new_columns) 
     
     # 添加来源标记
     df['_源文件'] = filename
+
+    # 确保列名唯一性
+    valid_columns = []
+    seen = set()
+    for col in list(new_columns.values()) + ['_源文件']:
+        if col not in seen:
+            seen.add(col)
+            valid_columns.append(col)
     
-    return df[list(new_columns.values())], column_log, special_cols, unmatched
+    return df[valid_columns], column_log, special_cols, unmatched
 def process_all_files():
     """批量处理所有Excel文件"""
     setup_dirs()
@@ -111,11 +127,24 @@ def process_all_files():
             # 读取文件
             df = pd.read_excel(file_path, engine='openpyxl')
             
-            # 处理合并单元格
-            df = df.ffill()
+            # 处理合并单元格（修改此处）
+            # 原代码：df = df.ffill()
+            # 新代码：仅对需要填充的列执行ffill
+            fill_columns = ['专业组', '专业名称']  # 需要合并单元格填充的列
+            for col in fill_columns:
+                if col in df.columns:
+                    df[col] = df[col].ffill()
             
             # 执行列映射
             processed_df, log, special_cols, unmatched = map_columns(df, file_path.name)
+
+            # 添加学校名称列（新增代码）
+            processed_df['学校名称'] = file_path.stem
+
+            # 新增保障代码
+            for col in CONFIG['standard_columns']:
+                if col not in processed_df.columns:
+                    processed_df[col] = None  # 填充缺失列
             
             # 收集数据
             all_data.append(processed_df)
@@ -147,11 +176,29 @@ def process_all_files():
     
     # 合并数据
     if all_data:
-        final_df = pd.concat(all_data, ignore_index=True)
+        # final_df = pd.concat(all_data, ignore_index=True)
+        # 获取所有可能的列名（统一列顺序）
+        all_columns = CONFIG['standard_columns'] + ['_源文件', '学校名称']
         
+        # 统一各DataFrame的列结构
+        unified_dfs = []
+        for df in all_data:
+            if len (df.columns) != len (set (df.columns)):
+                print(f"发现重复列名：{df.columns}")
+                print(df)
+                raise 
+            # 添加缺失列
+            for col in all_columns:
+                if col not in df.columns:
+                    df[col] = None
+            # 按标准顺序排列列
+            unified_dfs.append(df[all_columns])
+
+        final_df = pd.concat(unified_dfs, ignore_index=True)
+
         # 动态生成最终列名（确保列存在）
         final_columns = []
-        for col in CONFIG['standard_columns'] + ['_源文件']:
+        for col in CONFIG['standard_columns'] + ['_源文件','学校名称']:
             if col in final_df.columns:
                 final_columns.append(col)
             else:
