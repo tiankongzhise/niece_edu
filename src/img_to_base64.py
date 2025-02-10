@@ -2,9 +2,9 @@ import os
 import base64
 
 # 目标目录
-img_dir = "./img/"
+img_dir = "./pdfimg/new/"
 OUTPUT_DIR = "./data/"
-OUTPUT_FILE = os.path.join(OUTPUT_DIR, "base64.txt")
+OUTPUT_FILE = os.path.join(OUTPUT_DIR, "base642.txt")
 
 # 支持的图片扩展名及其对应的MIME类型
 IMAGE_MIME_MAP = {

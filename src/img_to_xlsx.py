@@ -6,7 +6,7 @@ from tencent_sdk import img_to_excel_tencent_sdk
 
 
 
-def process_base64_to_excel(input_file="./data/base64.txt", output_dir="./data/excel/"):
+def process_base64_to_excel(input_file="./data/base642.txt", output_dir="./data/excel1/"):
     """
     从base64.txt读取数据，调用腾讯云SDK处理，并保存Excel文件
     """
